@@ -18,6 +18,13 @@ def image_copy_paste(img, paste_img, alpha, blend=True, sigma=1):
 
     return img
 
+def background_copy_paste(img, mask, paste_img, alpha, blend=True, sigma=1):
+    img_dtype = img.dtype
+    img = paste_img * alpha + img * (1 - alpha)
+    img = img.astype(img_dtype)
+
+    return img
+
 def mask_copy_paste(mask, paste_mask, alpha):
     raise NotImplementedError
 
@@ -98,10 +105,8 @@ def keypoints_copy_paste(keypoints, paste_keypoints, alpha):
 class CopyPaste(A.DualTransform):
     def __init__(
         self,
-        blend=True,
+        alpha=1.,
         sigma=3,
-        pct_objects_paste=0.1,
-        max_paste_objects=None,
         p=0.5,
         always_apply=False
     ):
@@ -122,10 +127,10 @@ class CopyPaste(A.DualTransform):
         return [
             "masks",
             "paste_image",
-            # "paste_mask",
-            # "paste_masks",
-            # "paste_bboxes",
-            # "paste_keypoints"
+            #"paste_mask",
+            "paste_masks",
+            "paste_bboxes",
+            #"paste_keypoints"
         ]
 
     def get_params_dependent_on_targets(self, params):
@@ -244,6 +249,69 @@ class CopyPaste(A.DualTransform):
             "pct_objects_paste",
             "max_paste_objects"
         )
+
+class ChangeBackground(A.DualTransform):
+    def __init__(
+        self,
+        p=0.5,
+        always_apply=False
+    ):
+        super(ChangeBackground, self).__init__(always_apply, p)
+        self.p = p
+        self.always_apply = always_apply
+
+    @staticmethod
+    def get_class_fullname():
+        return 'copypaste.ChangeBackground'
+
+    @property
+    def targets_as_params(self):
+        return [
+            "mask",
+            "paste_images"
+        ]
+
+    def get_params_dependent_on_targets(self, params):
+        paste_images = params["paste_images"]
+
+        #select image to paste
+        image_to_paste = np.random.choice(
+            paste_images, 1
+        )[0]
+
+        return {
+            "mask": params["mask"],
+            "paste_img": image_to_paste
+        }
+
+    @property
+    def ignore_kwargs(self):
+        return [
+            "paste_image",
+            "paste_mask",
+            "paste_masks"
+        ]
+
+    def apply_with_params(self, params, force_apply=False, **kwargs):  # skipcq: PYL-W0613
+        if params is None:
+            return kwargs
+        params = self.update_params(params, **kwargs)
+        res = {}
+        for key, arg in kwargs.items():
+            if arg is not None and key not in self.ignore_kwargs:
+                target_function = self._get_target_function(key)
+                target_dependencies = {k: kwargs[k] for k in self.target_dependence.get(key, [])}
+                target_dependencies['key'] = key
+                res[key] = target_function(arg, **dict(params, **target_dependencies))
+            else:
+                res[key] = None
+        return res
+
+    def apply(self, img, mask, paste_img, alpha, **params):
+        return background_copy_paste(
+            img, mask, paste_img
+        )
+
 
 def copy_paste_class(dataset_class):
     def _split_transforms(self):
