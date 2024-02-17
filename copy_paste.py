@@ -122,10 +122,10 @@ class CopyPaste(A.DualTransform):
         return [
             "masks",
             "paste_image",
-            #"paste_mask",
-            "paste_masks",
-            "paste_bboxes",
-            #"paste_keypoints"
+            # "paste_mask",
+            # "paste_masks",
+            # "paste_bboxes",
+            # "paste_keypoints"
         ]
 
     def get_params_dependent_on_targets(self, params):
